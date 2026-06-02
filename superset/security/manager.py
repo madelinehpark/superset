@@ -3673,6 +3673,8 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
                 raise ValueError("Guest token does not contain an rls_rules claim")
             if token.get("type") != "guest":
                 raise ValueError("This is not a guest token.")
+            if self._is_guest_token_revoked(token):
+                raise ValueError("Guest token has been revoked")
         except Exception:  # pylint: disable=broad-except
             # The login manager will handle sending 401s.
             # We don't need to send a special error message.
@@ -3680,6 +3682,44 @@ class SupersetSecurityManager(  # pylint: disable=too-many-public-methods
             return None
 
         return self.get_guest_user_from_token(cast(GuestToken, token))
+
+    @staticmethod
+    def _is_guest_token_revoked(token: dict[str, Any]) -> bool:
+        """Return True if the token predates a revocation on any of its
+        embedded-dashboard resources (``guest_token_revoked_before``)."""
+        issued_at = token.get("iat")
+        if not issued_at:
+            return False
+
+        # pylint: disable=import-outside-toplevel
+        from superset.daos.dashboard import EmbeddedDashboardDAO
+
+        for resource in token.get("resources") or []:
+            if resource.get("type") != GuestTokenResourceType.DASHBOARD.value:
+                continue
+            embedded = EmbeddedDashboardDAO.find_by_id(str(resource.get("id")))
+            revoked_before = getattr(embedded, "guest_token_revoked_before", None)
+            if revoked_before is not None and issued_at < revoked_before:
+                return True
+        return False
+
+    def revoke_guest_token_access(
+        self, embedded_uuid: str, before: Optional[int] = None
+    ) -> None:
+        """Revoke all guest tokens issued for an embedded dashboard before
+        ``before`` (epoch seconds, default: now). Subsequent tokens are
+        unaffected."""
+        # pylint: disable=import-outside-toplevel
+        from superset import db
+        from superset.daos.dashboard import EmbeddedDashboardDAO
+
+        embedded = EmbeddedDashboardDAO.find_by_id(str(embedded_uuid))
+        if embedded is None:
+            return
+        embedded.guest_token_revoked_before = (
+            before if before is not None else int(self._get_current_epoch_time())
+        )
+        db.session.commit()  # pylint: disable=consider-using-transaction
 
     def get_guest_user_from_token(self, token: GuestToken) -> GuestUser:
         return self.guest_user_cls(
