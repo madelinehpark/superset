@@ -1022,6 +1022,178 @@ def test_processing_time_offsets_updates_temporal_filter_with_adhoc_x_axis(proce
     assert "2025-06-01" in val, f"Expected shifted-to-dttm in val, got: {val!r}"
 
 
+def test_processing_time_offsets_relative_offset_preserves_partial_period(processor):
+    """Relative offset inner bounds use the original selected period (outer bounds),
+    not the shifted values. This ensures partial-period shapes are preserved when
+    the time grain bucket is coarser than the selected range.
+
+    Example: range 2026-05-01..2026-05-28, grain=month, offset="365 days ago".
+    The shifted from/to become 2025-05-01..2025-05-28, but inner bounds must stay
+    at 2026-05-01..2026-05-28 (the original period) so the subquery clips to the
+    equivalent partial period rather than expanding to the full month bucket.
+    """
+    from superset.common.query_object import QueryObject
+    from superset.models.helpers import ExploreMixin
+
+    processor._qc_datasource.processing_time_offsets = (
+        ExploreMixin.processing_time_offsets.__get__(processor._qc_datasource)
+    )
+
+    df = pd.DataFrame(
+        {
+            "__timestamp": pd.to_datetime(["2026-05-01"]),
+            "sum__num": [100],
+        }
+    )
+
+    query_object = QueryObject(
+        datasource=MagicMock(),
+        granularity="ds",
+        columns=[],
+        metrics=["sum__num"],
+        is_timeseries=True,
+        row_limit=100,
+        time_offsets=["365 days ago"],
+        filters=[
+            {
+                "col": "ds",
+                "op": "TEMPORAL_RANGE",
+                "val": "2026-05-01 : 2026-05-28",
+            }
+        ],
+    )
+
+    captured: list[dict[str, Any]] = []
+
+    def fake_query(dct: dict[str, Any]) -> MagicMock:
+        captured.append(dct)
+        result = MagicMock()
+        result.df = pd.DataFrame()
+        result.query = "SELECT 1"
+        return result
+
+    processor._qc_datasource.query = fake_query
+    processor._qc_datasource.normalize_df = MagicMock(return_value=pd.DataFrame())
+
+    outer_from = pd.Timestamp("2026-05-01")
+    outer_to = pd.Timestamp("2026-05-28")
+
+    with (
+        patch(
+            "superset.models.helpers.get_since_until_from_query_object",
+            return_value=(outer_from, outer_to),
+        ),
+        patch(
+            "superset.common.utils.query_cache_manager.QueryCacheManager"
+        ) as mock_cache_manager,
+        patch.object(
+            processor._qc_datasource,
+            "get_time_grain",
+            return_value="P1M",
+        ),
+        patch.object(
+            processor._qc_datasource,
+            "join_offset_dfs",
+            return_value=df,
+        ),
+    ):
+        mock_cache = MagicMock()
+        mock_cache.is_loaded = False
+        mock_cache_manager.get.return_value = mock_cache
+
+        processor._qc_datasource.processing_time_offsets(
+            df, query_object, None, None, False
+        )
+
+    assert len(captured) == 1
+    # inner bounds must equal the original (unshifted) outer period
+    assert captured[0]["inner_from_dttm"] == outer_from
+    assert captured[0]["inner_to_dttm"] == outer_to
+    # from/to must be the shifted values (365 days earlier)
+    assert captured[0]["from_dttm"] == pd.Timestamp("2025-05-01")
+    assert captured[0]["to_dttm"] == pd.Timestamp("2025-05-28")
+
+
+def test_processing_time_offsets_date_range_offset_inner_bounds_none(processor):
+    """Date-range offsets with DATE_RANGE_TIMESHIFTS_ENABLED must keep inner
+    bounds as None so they don't conflict with the explicit date range."""
+    from superset.common.query_object import QueryObject
+    from superset.models.helpers import ExploreMixin
+
+    processor._qc_datasource.processing_time_offsets = (
+        ExploreMixin.processing_time_offsets.__get__(processor._qc_datasource)
+    )
+
+    df = pd.DataFrame(
+        {
+            "__timestamp": pd.to_datetime(["2026-05-01"]),
+            "sum__num": [100],
+        }
+    )
+
+    query_object = QueryObject(
+        datasource=MagicMock(),
+        granularity="ds",
+        columns=[],
+        metrics=["sum__num"],
+        is_timeseries=True,
+        row_limit=100,
+        time_offsets=["2025-05-01 : 2025-05-28"],
+        filters=[
+            {
+                "col": "ds",
+                "op": "TEMPORAL_RANGE",
+                "val": "2026-05-01 : 2026-05-28",
+            }
+        ],
+    )
+
+    captured: list[dict[str, Any]] = []
+
+    def fake_query(dct: dict[str, Any]) -> MagicMock:
+        captured.append(dct)
+        result = MagicMock()
+        result.df = pd.DataFrame()
+        result.query = "SELECT 1"
+        return result
+
+    processor._qc_datasource.query = fake_query
+    processor._qc_datasource.normalize_df = MagicMock(return_value=pd.DataFrame())
+
+    with (
+        patch(
+            "superset.models.helpers.get_since_until_from_query_object",
+            return_value=(pd.Timestamp("2026-05-01"), pd.Timestamp("2026-05-28")),
+        ),
+        patch(
+            "superset.common.utils.query_cache_manager.QueryCacheManager"
+        ) as mock_cache_manager,
+        patch.object(
+            processor._qc_datasource,
+            "get_time_grain",
+            return_value="P1M",
+        ),
+        patch.object(
+            processor._qc_datasource,
+            "join_offset_dfs",
+            return_value=df,
+        ),
+        patch("superset.models.helpers.feature_flag_manager") as mock_ff,
+    ):
+        mock_ff.is_feature_enabled.return_value = True
+        mock_cache = MagicMock()
+        mock_cache.is_loaded = False
+        mock_cache_manager.get.return_value = mock_cache
+
+        processor._qc_datasource.processing_time_offsets(
+            df, query_object, None, None, False
+        )
+
+    assert len(captured) == 1
+    assert captured[0]["inner_from_dttm"] is None
+    assert captured[0]["inner_to_dttm"] is None
+
+
 def test_ensure_totals_available_updates_cache_values():
     """
     Test that ensure_totals_available() updates the query objects AND
