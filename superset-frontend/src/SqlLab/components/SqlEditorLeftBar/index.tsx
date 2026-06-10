@@ -155,7 +155,7 @@ const SqlEditorLeftBar = ({ queryEditorId }: SqlEditorLeftBarProps) => {
           )
         }
         schema={modalSchema?.value}
-        sqlLabMode={false}
+        sqlLabFilter
       />
       <Flex justify="flex-end" gap="small">
         <Button

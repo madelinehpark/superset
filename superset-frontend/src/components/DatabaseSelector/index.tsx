@@ -187,6 +187,7 @@ export function DatabaseSelector({
   schema,
   readOnly = false,
   sqlLabMode = false,
+  sqlLabFilter = false,
   onOpenModal,
 }: DatabaseSelectorProps) {
   const showCatalogSelector = !!db?.allow_multi_catalog;
@@ -227,7 +228,7 @@ export function DatabaseSelector({
           order_direction: 'asc',
           page,
           page_size: pageSize,
-          ...(formMode || !sqlLabMode
+          ...(formMode || !(sqlLabMode || sqlLabFilter)
             ? { filters: [{ col: 'database_name', opr: 'ct', value: search }] }
             : {
                 filters: [
@@ -277,7 +278,7 @@ export function DatabaseSelector({
           };
         });
       },
-    [formMode, getDbList, sqlLabMode, onEmptyResults],
+    [formMode, getDbList, sqlLabMode, sqlLabFilter, onEmptyResults],
   );
 
   useEffect(() => {

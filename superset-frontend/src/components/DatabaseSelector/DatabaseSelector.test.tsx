@@ -367,6 +367,44 @@ test('Sends the correct db when changing the database', async () => {
   );
 });
 
+test('sqlLabFilter adds expose_in_sqllab filter to database API requests', async () => {
+  const props = createProps();
+  render(<DatabaseSelector {...props} sqlLabFilter />, {
+    useRedux: true,
+    store,
+  });
+  const select = screen.getByRole('combobox', {
+    name: 'Select database or type to search databases',
+  });
+  await userEvent.click(select);
+  await waitFor(() => {
+    const calls = fetchMock.callHistory
+      .calls(databaseApiRoute)
+      .map(call => call.url);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls.some(url => url.includes('expose_in_sqllab'))).toBe(true);
+  });
+});
+
+test('without sqlLabFilter or sqlLabMode does not add expose_in_sqllab filter', async () => {
+  const props = createProps();
+  render(<DatabaseSelector {...props} />, {
+    useRedux: true,
+    store,
+  });
+  const select = screen.getByRole('combobox', {
+    name: 'Select database or type to search databases',
+  });
+  await userEvent.click(select);
+  await waitFor(() => {
+    const calls = fetchMock.callHistory
+      .calls(databaseApiRoute)
+      .map(call => call.url);
+    expect(calls.length).toBeGreaterThanOrEqual(1);
+    expect(calls.every(url => !url.includes('expose_in_sqllab'))).toBe(true);
+  });
+});
+
 test('Sends the correct schema when changing the schema', async () => {
   const props = createProps();
   const { rerender } = render(<DatabaseSelector {...props} db={null} />, {
