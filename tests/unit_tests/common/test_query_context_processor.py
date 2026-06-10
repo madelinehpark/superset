@@ -1112,6 +1112,10 @@ def test_processing_time_offsets_relative_offset_preserves_partial_period(proces
     # from/to must be the shifted values (365 days earlier)
     assert captured[0]["from_dttm"] == pd.Timestamp("2025-05-01")
     assert captured[0]["to_dttm"] == pd.Timestamp("2025-05-28")
+    # series_limit cleared to avoid conflicting WHERE clauses in the
+    # series-limit subquery (shifted temporal filter vs unshifted inner bounds)
+    assert captured[0]["series_limit"] == 0
+    assert captured[0]["series_limit_metric"] is None
 
 
 def test_processing_time_offsets_date_range_offset_inner_bounds_none(processor):
