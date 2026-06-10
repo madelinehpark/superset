@@ -238,6 +238,40 @@ test('ignore schema api when current schema is deprecated', async () => {
   );
 });
 
+test('picker dialog filters databases by expose_in_sqllab', async () => {
+  await renderAndWait(mockedProps, undefined, {
+    ...initialState,
+    sqlLab: {
+      ...initialState.sqlLab,
+      unsavedQueryEditor: {
+        id: mockedProps.queryEditorId,
+        dbId: mockData.database.id,
+      },
+      tables: [table],
+      databases: {
+        [mockData.database.id]: {
+          ...mockData.database,
+        },
+      },
+    },
+  });
+  fetchMock.clearHistory();
+  await switchToSelectView();
+
+  const dbSelect = screen.getByRole('combobox', {
+    name: 'Select database or type to search databases',
+  });
+  await userEvent.click(dbSelect);
+
+  await waitFor(() => {
+    const dbCalls = fetchMock.callHistory
+      .calls('glob:*/api/v1/database/?*')
+      .map(call => call.url);
+    expect(dbCalls.length).toBeGreaterThanOrEqual(1);
+    expect(dbCalls.some(url => url.includes('expose_in_sqllab'))).toBe(true);
+  });
+});
+
 test('uses EMPTY_STATE_QE_ID when queryEditorId is empty', async () => {
   const useDatabaseSelectorSpy = jest.spyOn(
     useDatabaseSelectorModule,
