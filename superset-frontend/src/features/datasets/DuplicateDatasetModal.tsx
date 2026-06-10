@@ -45,7 +45,9 @@ const DuplicateDatasetModal: FunctionComponent<DuplicateDatasetModalProps> = ({
   };
 
   const duplicateDataset = () => {
-    onDuplicate(newDuplicateDatasetName);
+    if (newDuplicateDatasetName) {
+      onDuplicate(newDuplicateDatasetName);
+    }
   };
 
   useEffect(() => {

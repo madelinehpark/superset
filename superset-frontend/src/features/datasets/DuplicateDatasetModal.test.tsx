@@ -254,6 +254,21 @@ test('pressing Enter key triggers duplicate action', async () => {
   });
 });
 
+test('pressing Enter on empty input does not trigger duplicate', async () => {
+  const onHide = jest.fn();
+  const onDuplicate = jest.fn();
+
+  renderModal(mockDataset, onHide, onDuplicate);
+
+  const input = await screen.findByTestId('duplicate-modal-input');
+
+  // Input is empty — press Enter
+  await userEvent.type(input, '{enter}');
+
+  // onDuplicate should NOT be called
+  expect(onDuplicate).not.toHaveBeenCalled();
+});
+
 test('modal closes when onHide is called', async () => {
   const onHide = jest.fn();
   const onDuplicate = jest.fn();
