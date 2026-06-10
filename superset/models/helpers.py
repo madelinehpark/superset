@@ -1797,6 +1797,8 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
 
             query_object_clone.time_offsets = []
             query_object_clone.post_processing = []
+            query_object_clone.series_limit = 0
+            query_object_clone.series_limit_metric = None
 
             # Get time offset index
             index = (get_base_axis_labels(query_object.columns) or [DTTM_ALIAS])[0]
