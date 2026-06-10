@@ -1784,8 +1784,8 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
                         offset, outer_to_dttm
                     )
 
-                    query_object_clone.inner_from_dttm = query_object_clone.from_dttm
-                    query_object_clone.inner_to_dttm = query_object_clone.to_dttm
+                    query_object_clone.inner_from_dttm = outer_from_dttm
+                    query_object_clone.inner_to_dttm = outer_to_dttm
 
                 x_axis_label = get_x_axis_label(query_object.columns)
                 query_object_clone.granularity = (
@@ -1797,6 +1797,8 @@ class ExploreMixin:  # pylint: disable=too-many-public-methods
 
             query_object_clone.time_offsets = []
             query_object_clone.post_processing = []
+            query_object_clone.series_limit = 0
+            query_object_clone.series_limit_metric = None
 
             # Get time offset index
             index = (get_base_axis_labels(query_object.columns) or [DTTM_ALIAS])[0]
