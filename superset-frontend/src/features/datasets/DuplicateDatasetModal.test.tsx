@@ -87,6 +87,67 @@ const renderModal = (
     <Wrapper dataset={dataset} onHide={onHide} onDuplicate={onDuplicate} />,
   );
 
+test('duplicate button is disabled on initial modal open', async () => {
+  const onHide = jest.fn();
+  const onDuplicate = jest.fn();
+
+  renderModal(mockDataset, onHide, onDuplicate);
+
+  const duplicateButton = await screen.findByRole('button', {
+    name: /duplicate/i,
+  });
+  expect(duplicateButton).toBeDisabled();
+});
+
+test('duplicate button is disabled on re-open after cancel', async () => {
+  const onHide = jest.fn();
+  const onDuplicate = jest.fn();
+
+  const { rerender } = renderModal(mockDataset, onHide, onDuplicate);
+
+  const input = await screen.findByTestId('duplicate-modal-input');
+
+  // Type a name to enable the button
+  await userEvent.type(input, 'some_name');
+  const duplicateButton = screen.getByRole('button', { name: /duplicate/i });
+  expect(duplicateButton).toBeEnabled();
+
+  // Simulate cancel: close then re-open
+  rerender(
+    <Wrapper dataset={null} onHide={onHide} onDuplicate={onDuplicate} />,
+  );
+  rerender(
+    <Wrapper dataset={mockDataset} onHide={onHide} onDuplicate={onDuplicate} />,
+  );
+
+  // Button should be disabled again with empty input
+  const reopenedButton = await screen.findByRole('button', {
+    name: /duplicate/i,
+  });
+  expect(reopenedButton).toBeDisabled();
+});
+
+test('typing enables button and clearing disables it', async () => {
+  const onHide = jest.fn();
+  const onDuplicate = jest.fn();
+
+  renderModal(mockDataset, onHide, onDuplicate);
+
+  const input = await screen.findByTestId('duplicate-modal-input');
+  const duplicateButton = screen.getByRole('button', { name: /duplicate/i });
+
+  // Initially disabled
+  expect(duplicateButton).toBeDisabled();
+
+  // Type a name — enabled
+  await userEvent.type(input, 'new_name');
+  expect(duplicateButton).toBeEnabled();
+
+  // Clear — disabled again
+  await userEvent.clear(input);
+  expect(duplicateButton).toBeDisabled();
+});
+
 test('modal opens when dataset is provided', async () => {
   const onHide = jest.fn();
   const onDuplicate = jest.fn();
